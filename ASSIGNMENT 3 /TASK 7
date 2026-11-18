@@ -1,0 +1,139 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.List;
+import java.util.ArrayList;
+
+class Result {
+
+    String fileName;
+    int mark;
+    boolean success;
+    String message;
+
+    Result(String fileName, int mark, boolean success, String message) {
+        this.fileName = fileName;
+        this.mark = mark;
+        this.success = success;
+        this.message = message;
+    }
+}
+
+class ScoreTask implements Callable<Result> {
+
+    private final String fileName;
+
+    ScoreTask(String fileName) {
+        this.fileName = fileName;
+    }
+
+    @Override
+    public Result call() {
+
+        try (BufferedReader br =
+                new BufferedReader(new FileReader(fileName))) {
+
+            String line = br.readLine();
+
+            if (line == null) {
+                throw new IOException("Empty file");
+            }
+
+            int mark = Integer.parseInt(line);
+
+            if (mark < 0 || mark > 100) {
+                throw new IllegalArgumentException("Invalid mark");
+            }
+
+            return new Result(fileName, mark, true, "Success");
+
+        } catch (Exception e) {
+
+            return new Result(fileName, 0, false,
+                    e.getMessage());
+        }
+    }
+}
+
+public class ResultProcessor {
+
+    public static void main(String[] args)
+            throws Exception {
+
+        int totalFiles = 100;
+
+        // Create sample score files
+        for (int i = 1; i <= totalFiles; i++) {
+
+            try (FileWriter fw =
+                    new FileWriter("score" + i + ".txt")) {
+
+                if (i % 10 == 0) {
+                    fw.write("INVALID");
+                } else {
+                    fw.write(String.valueOf(i % 101));
+                }
+            }
+        }
+
+        // Thread pool
+        ExecutorService executor =
+                Executors.newFixedThreadPool(4);
+
+        ConcurrentLinkedQueue<Result> results =
+                new ConcurrentLinkedQueue<>();
+
+        List<Future<Result>> futures = new ArrayList<>();
+
+        long start = System.nanoTime();
+
+        // Submit tasks
+        for (int i = 1; i <= totalFiles; i++) {
+
+            String fileName = "score" + i + ".txt";
+
+            Callable<Result> task = new ScoreTask(fileName);
+
+            futures.add(executor.submit(task));
+        }
+
+        // Collect results
+        for (Future<Result> future : futures) {
+            results.add(future.get());
+        }
+
+        executor.shutdown();
+
+        long end = System.nanoTime();
+
+        int success = 0;
+        int failure = 0;
+        int totalMarks = 0;
+
+        for (Result r : results) {
+
+            if (r.success) {
+                success++;
+                totalMarks += r.mark;
+            } else {
+                failure++;
+                System.out.println("Failed: " + r.fileName
+                        + " - " + r.message);
+            }
+        }
+
+        System.out.println("\nProcessing completed");
+        System.out.println("Successful files: " + success);
+        System.out.println("Failed files: " + failure);
+        System.out.println("Total marks: " + totalMarks);
+
+        System.out.println("Execution time: "
+                + (end - start) / 1_000_000.0 + " ms");
+    }
+}
