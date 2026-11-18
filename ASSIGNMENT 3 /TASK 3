@@ -1,0 +1,74 @@
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class SalesReport {
+
+    static void manualClose() {
+
+        BufferedReader reader = null;
+        BufferedWriter writer = null;
+
+        try {
+            reader = new BufferedReader(new FileReader("sales.txt"));
+            writer = new BufferedWriter(new FileWriter("report.txt"));
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                writer.write(line);
+                writer.newLine();
+            }
+
+            System.out.println("Manual report generated");
+
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+
+        } finally {
+
+            try {
+                if (reader != null)
+                    reader.close();
+
+                if (writer != null)
+                    writer.close();
+
+            } catch (IOException e) {
+                System.out.println("Closing error");
+            }
+        }
+    }
+
+    static void tryWithResources() {
+
+        try (
+            BufferedReader reader =
+                    new BufferedReader(new FileReader("sales.txt"));
+
+            BufferedWriter writer =
+                    new BufferedWriter(new FileWriter("report2.txt"))
+        ) {
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                writer.write(line);
+                writer.newLine();
+            }
+
+            System.out.println("Try-with-resources report generated");
+
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+
+        manualClose();
+        tryWithResources();
+    }
+}
