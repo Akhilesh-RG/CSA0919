@@ -1,0 +1,82 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+
+public class ConverterC extends JFrame {
+
+    JTextField amount = new JTextField(10);
+
+    JComboBox<String> target =
+            new JComboBox<>(new String[]{"USD", "EUR"});
+
+    JLabel result = new JLabel();
+
+    JButton convert = new JButton("Convert");
+
+    ConverterC() {
+
+        setTitle("Currency Converter");
+        setLayout(new FlowLayout());
+
+        add(new JLabel("INR"));
+        add(amount);
+        add(target);
+        add(convert);
+        add(result);
+
+        ActionListener handler = new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+
+                try {
+
+                    double value =
+                            Double.parseDouble(amount.getText());
+
+                    double rate = target.getSelectedItem()
+                            .equals("USD") ? 0.012 : 0.011;
+
+                    double converted = value * rate;
+
+                    result.setText(
+                            String.format("%.2f", converted));
+
+                    JOptionPane.showMessageDialog(
+                            ConverterC.this,
+                            "Converted Amount: " + result.getText());
+
+                } catch (NumberFormatException ex) {
+
+                    result.setText("Invalid amount");
+
+                    JOptionPane.showMessageDialog(
+                            ConverterC.this,
+                            "Invalid amount");
+                }
+            }
+        };
+
+        convert.addActionListener(handler);
+        amount.addActionListener(handler);
+
+        addWindowListener(new WindowAdapter() {
+
+            @Override
+            public void windowClosing(WindowEvent e) {
+                dispose();
+            }
+        });
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(350, 200);
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    public static void main(String[] args) {
+
+        SwingUtilities.invokeLater(() ->
+                new ConverterC());
+    }
+}
