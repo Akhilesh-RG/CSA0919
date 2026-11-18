@@ -1,0 +1,330 @@
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.sql.*;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class CampusEventApp extends JFrame {
+
+    private JTextField studentId = new JTextField(15);
+    private JTextField studentName = new JTextField(15);
+    private JTextField email = new JTextField(15);
+
+    private JComboBox<String> event = new JComboBox<>(
+            new String[]{
+                    "Sports Day",
+                    "Cultural Fest",
+                    "Tech Symposium",
+                    "Workshop"
+            });
+
+    private JComboBox<String> filter = new JComboBox<>(
+            new String[]{
+                    "All Events",
+                    "Sports Day",
+                    "Cultural Fest",
+                    "Tech Symposium",
+                    "Workshop"
+            });
+
+    private JButton register = new JButton("Register");
+    private JButton view = new JButton("View Registrations");
+    private JButton export = new JButton("Export CSV");
+
+    private JTable table;
+    private DefaultTableModel model;
+
+    private static final String URL =
+            "jdbc:mysql://localhost:3306/campus_events";
+
+    private static final String USER = "root";
+    private static final String PASSWORD = "your_password";
+
+    CampusEventApp() {
+
+        setTitle("Campus Event Registration");
+        setLayout(new BorderLayout(10, 10));
+
+        // Registration Panel
+        JPanel form = new JPanel(new GridLayout(5, 2, 10, 10));
+
+        form.add(new JLabel("Student ID"));
+        form.add(studentId);
+
+        form.add(new JLabel("Student Name"));
+        form.add(studentName);
+
+        form.add(new JLabel("Email"));
+        form.add(email);
+
+        form.add(new JLabel("Event"));
+        form.add(event);
+
+        form.add(register);
+        form.add(view);
+
+        // Table
+        model = new DefaultTableModel(
+                new String[]{
+                        "ID", "Student ID", "Student Name",
+                        "Event", "Email", "Date"
+                }, 0);
+
+        table = new JTable(model);
+
+        JPanel top = new JPanel(new BorderLayout());
+
+        top.add(form, BorderLayout.CENTER);
+
+        JPanel filterPanel = new JPanel();
+
+        filterPanel.add(new JLabel("Filter Event"));
+        filterPanel.add(filter);
+        filterPanel.add(export);
+
+        top.add(filterPanel, BorderLayout.SOUTH);
+
+        add(top, BorderLayout.NORTH);
+        add(new JScrollPane(table), BorderLayout.CENTER);
+
+        // Menu Bar
+        JMenuBar menuBar = new JMenuBar();
+
+        JMenu menu = new JMenu("Menu");
+
+        JMenuItem refresh = new JMenuItem("Refresh");
+        JMenuItem exit = new JMenuItem("Exit");
+
+        menu.add(refresh);
+        menu.add(exit);
+
+        menuBar.add(menu);
+
+        setJMenuBar(menuBar);
+
+        // Events
+        register.addActionListener(e -> registerStudent());
+        view.addActionListener(e -> loadRegistrations());
+        filter.addActionListener(e -> loadRegistrations());
+        export.addActionListener(e -> exportCSV());
+
+        refresh.addActionListener(e -> loadRegistrations());
+
+        exit.addActionListener(e -> dispose());
+
+        // Initial loading
+        loadRegistrations();
+
+        setSize(900, 500);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    // Database Connection
+    Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL, USER, PASSWORD);
+    }
+
+    // Registration
+    void registerStudent() {
+
+        String id = studentId.getText().trim();
+        String name = studentName.getText().trim();
+        String mail = email.getText().trim();
+        String selectedEvent = event.getSelectedItem().toString();
+
+        if (id.isEmpty() || name.isEmpty() || mail.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "All fields are required");
+            return;
+        }
+
+        if (!mail.contains("@")) {
+            JOptionPane.showMessageDialog(this,
+                    "Enter valid email");
+            return;
+        }
+
+        register.setEnabled(false);
+
+        SwingWorker<Boolean, Void> worker =
+                new SwingWorker<Boolean, Void>() {
+
+            @Override
+            protected Boolean doInBackground() throws Exception {
+
+                String sql = "INSERT INTO registrations "
+                        + "(student_id, student_name, event_name, email) "
+                        + "VALUES (?, ?, ?, ?)";
+
+                try (Connection con = getConnection();
+                     PreparedStatement ps = con.prepareStatement(sql)) {
+
+                    ps.setString(1, id);
+                    ps.setString(2, name);
+                    ps.setString(3, selectedEvent);
+                    ps.setString(4, mail);
+
+                    ps.executeUpdate();
+
+                    return true;
+                }
+            }
+
+            @Override
+            protected void done() {
+
+                register.setEnabled(true);
+
+                try {
+                    get();
+
+                    JOptionPane.showMessageDialog(
+                            CampusEventApp.this,
+                            "Registration Successful");
+
+                    studentId.setText("");
+                    studentName.setText("");
+                    email.setText("");
+
+                    loadRegistrations();
+
+                } catch (Exception ex) {
+
+                    JOptionPane.showMessageDialog(
+                            CampusEventApp.this,
+                            "Duplicate registration or database error");
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    // Load Table
+    void loadRegistrations() {
+
+        model.setRowCount(0);
+
+        String selectedFilter = filter.getSelectedItem().toString();
+
+        SwingWorker<Void, Object[]> worker =
+                new SwingWorker<Void, Object[]>() {
+
+            @Override
+            protected Void doInBackground() throws Exception {
+
+                String sql;
+
+                if (selectedFilter.equals("All Events")) {
+                    sql = "SELECT * FROM registrations ORDER BY id";
+                } else {
+                    sql = "SELECT * FROM registrations "
+                            + "WHERE event_name = ? ORDER BY id";
+                }
+
+                try (Connection con = getConnection();
+                     PreparedStatement ps = con.prepareStatement(sql)) {
+
+                    if (!selectedFilter.equals("All Events")) {
+                        ps.setString(1, selectedFilter);
+                    }
+
+                    ResultSet rs = ps.executeQuery();
+
+                    while (rs.next()) {
+
+                        Object[] row = {
+                                rs.getInt("id"),
+                                rs.getString("student_id"),
+                                rs.getString("student_name"),
+                                rs.getString("event_name"),
+                                rs.getString("email"),
+                                rs.getTimestamp("registration_date")
+                        };
+
+                        publish(row);
+                    }
+                }
+
+                return null;
+            }
+
+            @Override
+            protected void process(java.util.List<Object[]> rows) {
+
+                for (Object[] row : rows) {
+                    model.addRow(row);
+                }
+            }
+
+            @Override
+            protected void done() {
+
+                try {
+                    get();
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(
+                            CampusEventApp.this,
+                            "Database loading error");
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    // Export CSV
+    void exportCSV() {
+
+        JFileChooser chooser = new JFileChooser();
+
+        chooser.setSelectedFile(
+                new java.io.File("registrations.csv"));
+
+        if (chooser.showSaveDialog(this)
+                != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        try (FileWriter writer =
+                new FileWriter(chooser.getSelectedFile())) {
+
+            for (int i = 0; i < model.getColumnCount(); i++) {
+                writer.write(model.getColumnName(i) + ",");
+            }
+
+            writer.write("\n");
+
+            for (int i = 0; i < model.getRowCount(); i++) {
+
+                for (int j = 0; j < model.getColumnCount(); j++) {
+
+                    writer.write(String.valueOf(
+                            model.getValueAt(i, j)));
+
+                    writer.write(",");
+                }
+
+                writer.write("\n");
+            }
+
+            JOptionPane.showMessageDialog(this,
+                    "Export Successful");
+
+        } catch (IOException e) {
+
+            JOptionPane.showMessageDialog(this,
+                    "Export Failed");
+        }
+    }
+
+    public static void main(String[] args) {
+
+        SwingUtilities.invokeLater(() -> {
+            new CampusEventApp();
+        });
+    }
+}
